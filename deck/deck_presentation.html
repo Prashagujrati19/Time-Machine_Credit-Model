@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Time Machine Credit Model - Executive Presentation</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background: #0f172a; color: #f8fafc; }
+  .deck-container { max-width: 960px; margin: 0 auto; }
+  .slide { background: #1e293b; border-radius: 12px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); border-top: 4px solid #3b82f6; }
+  .slide-header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #334155; padding-bottom: 15px; margin-bottom: 25px; }
+  .slide-number { font-size: 0.9rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px; }
+  h1 { font-size: 1.8rem; margin: 0; color: #ffffff; }
+  h2 { font-size: 1.25rem; color: #94a3b8; margin-top: 5px; font-weight: 400; }
+  ul { line-height: 1.8; font-size: 1.05rem; color: #cbd5e1; }
+  li { margin-bottom: 12px; }
+  strong { color: #f1f5f9; }
+  .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; margin-right: 8px; }
+  .badge-blue { background: #1e40af; color: #93c5fd; }
+  .badge-green { background: #065f46; color: #6ee7b7; }
+  .badge-amber { background: #78350f; color: #fcd34d; }
+  .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 25px 0; }
+  .kpi-card { background: #0f172a; border-radius: 8px; padding: 18px; text-align: center; border: 1px solid #334155; }
+  .kpi-val { font-size: 1.8rem; font-weight: 700; color: #38bdf8; }
+  .kpi-label { font-size: 0.85rem; color: #94a3b8; margin-top: 5px; }
+</style>
+</head>
+<body>
+<div class="deck-container">
+
+  <div class="slide">
+    <div class="slide-header">
+      <div>
+        <div class="slide-number">Slide 1 of 5 &bull; The Question</div>
+        <h1>The "Time Machine" Credit Model</h1>
+        <h2>How Fast Does a Loan-Approval Model Decay, and What Warns You First?</h2>
+      </div>
+    </div>
+    <ul>
+      <li><strong>The Core Dilemma:</strong> Commercial banks operate credit scorecards subject to Model Risk Governance (SR 11-7), but applicant populations, economic cycles, and risk profiles continuously drift.</li>
+      <li><strong>The Research Question:</strong> In an out-of-time production environment, how many months or years does a credit scorecard remain viable before discrimination, calibration, and profitability decay?</li>
+      <li><strong>The "Time Machine" Methodology:</strong> We fit a standardized WOE logistic scorecard strictly on 2012–2014 originations, freeze its parameters, and test it prospectively across 2015–2018.</li>
+    </ul>
+  </div>
+
+  <div class="slide">
+    <div class="slide-header">
+      <div>
+        <div class="slide-number">Slide 2 of 5 &bull; Data & Time Split</div>
+        <h1>Regulatory Out-of-Time Discipline</h1>
+        <h2>Preventing Data Leakage and Look-Ahead Bias</h2>
+      </div>
+    </div>
+    <ul>
+      <li><strong>No Random Splits:</strong> Shuffling multi-year lending records allows models to peek into future economic regimes, creating overly optimistic performance estimates.</li>
+      <li><strong>Cohort Isolation:</strong> 36-month completed Lending Club loans (<code>bad = 1</code> if Charged Off, <code>0</code> if Fully Paid). Active or unfinished loans are excluded.</li>
+      <li><strong>Zero Model Leakage:</strong> Post-origination performance metrics and Lending Club's proprietary model outputs (<code>grade</code>, <code>sub_grade</code>, <code>int_rate</code>) are purged to isolate true fundamental borrower risk.</li>
+      <li><strong>Time Split Architecture:</strong>
+        <ul>
+          <li><span class="badge badge-blue">Build (2012-2014)</span> Training, WOE binning, IV filtering, scorecard scaling.</li>
+          <li><span class="badge badge-green">Validate (2015)</span> In-sample benchmark; establish the 70% approval cut-off (533 points).</li>
+          <li><span class="badge badge-amber">Test (2016-2018)</span> Out-of-time longitudinal evaluation of the frozen model.</li>
+        </ul>
+      </li>
+    </ul>
+  </div>
+
+  <div class="slide">
+    <div class="slide-header">
+      <div>
+        <div class="slide-number">Slide 3 of 5 &bull; Scorecard & Aging</div>
+        <h1>Model Architecture & Out-of-Time Decay</h1>
+        <h2>Discrimination (Gini) vs Calibration Drift</h2>
+      </div>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi-card"><div class="kpi-val">0.329</div><div class="kpi-label">2015 Validation Gini</div></div>
+      <div class="kpi-card"><div class="kpi-val">533 pts</div><div class="kpi-label">70% Approval Cut-off</div></div>
+      <div class="kpi-card"><div class="kpi-val">0.237</div><div class="kpi-label">Validation KS Statistic</div></div>
+    </div>
+    <ul>
+      <li><strong>Scorecard Setup:</strong> Standard points formulation (600 pts @ 1/19 odds, PDO = 50). Kept predictors: FICO score, DTI, revolving utilization, inquiries in last 6 months.</li>
+      <li><strong>Discrimination Resilience:</strong> Gini ranking power remained durable (0.317 to 0.344) through 2018, confirming that relative risk ordering decays slowly.</li>
+      <li><strong>Calibration Drift:</strong> Macro shifts and right-censoring (unmatured 2017–2018 loans) drove substantial divergence between predicted PD and realized bad rates.</li>
+    </ul>
+  </div>
+
+  <div class="slide">
+    <div class="slide-header">
+      <div>
+        <div class="slide-number">Slide 4 of 5 &bull; Surveillance & Lead Time</div>
+        <h1>Early-Warning Surveillance Signals</h1>
+        <h2>Population Stability (PSI) & Covariate Drift (CSI)</h2>
+      </div>
+    </div>
+    <ul>
+      <li><strong>Surveillance Engine:</strong> Decoupling input demographic shift from lagging loan default outcomes.
+        <ul>
+          <li><strong>PSI on Scores:</strong> Measured against the 2012–2014 baseline decile distribution (&lt;0.10 stable, 0.10–0.25 monitor, &gt;0.25 trigger).</li>
+          <li><strong>CSI on Predictors:</strong> Characteristic stability index isolates which specific variable shifted first (DTI and inquiries led the drift).</li>
+        </ul>
+      </li>
+      <li><strong>Alert Criteria:</strong> <code>PSI &gt; 0.25</code> OR <code>|Calibration Gap| &gt; 0.25</code>.</li>
+      <li><strong>Key Surveillance Finding:</strong> <em>Calibration and covariate alerts provided a 1 to 2 year early-warning lead time before any breakdown in score ranking power occurred.</em></li>
+    </ul>
+  </div>
+
+  <div class="slide">
+    <div class="slide-header">
+      <div>
+        <div class="slide-number">Slide 5 of 5 &bull; Remediation & Recommendation</div>
+        <h1>Remediation Policies & Monitoring Plan</h1>
+        <h2>Comparing Strategy A, B, and C Under Real Portfolio Economics</h2>
+      </div>
+    </div>
+    <ul>
+      <li><strong>Strategy A (Do Nothing):</strong> Approval volume dropped as the applicant pool drifted, sacrificing portfolio growth ($65.8\% - 68.3\%$).</li>
+      <li><strong>Strategy B (Reset Cut-off):</strong> Re-benchmarking the cut-off annually restored target 70% approval and captured over 95% of rebuild value with <strong>zero model retraining costs</strong>.</li>
+      <li><strong>Strategy C (Model Rebuild):</strong> Rolling 3-year retrained scorecards yielded minimal Gini gains while incurring significant governance validation friction.</li>
+      <li><strong>Executive Recommendation:</strong>
+        <ol>
+          <li>Adopt <strong>annual cut-off recalibration (Strategy B)</strong> as standard operational policy.</li>
+          <li>Trigger full model rebuilds (Strategy C) strictly when both <code>PSI &gt; 0.25</code> and Gini degradation exceeds 5 points.</li>
+          <li>Maintain continuous quarterly CSI monitoring to identify shifting applicant risk tiers early.</li>
+        </ol>
+      </li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>
