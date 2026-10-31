@@ -1,0 +1,240 @@
+---
+title: "The 'Time Machine' Credit Scorecard"
+subtitle: "Longitudinal Decay, Early-Warning Surveillance, and Intervention Strategies in Unsecured Lending"
+author: "Credit Risk Analytics & Modelling"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.path = "charts/",
+  fig.width = 8,
+  fig.height = 5,
+  dpi = 300
+)
+
+set.seed(42)
+library(tidyverse)
+library(lubridate)
+library(scorecard)
+library(pROC)
+library(scales)
+library(knitr)
+```
+
+# Executive Summary
+
+Credit risk scorecards deployed in commercial banking inevitably face environmental drift. Unlike randomized cross-validation in standard machine learning, financial risk models must navigate macroeconomic regime shifts, changing underwriting policies, and population aging. 
+
+This study constructs the **"Time Machine"** credit risk experiment:
+1. **Model Build (2012–2014):** A weight-of-evidence (WOE) logistic scorecard is developed on completed 36-month Lending Club loans.
+2. **Validation & Cut-off (2015):** The model is validated out-of-time (OOT) and an approval cut-off is set at the 70th percentile of scores.
+3. **Frozen Longitudinal Run (2016–2018):** The scorecard is frozen and evaluated across future cohorts without retraining to quantify decay in discrimination ($Gini$), calibration gap ($\text{Calib Gap}$), and profitability.
+4. **Surveillance & Early Warning:** Population Stability Index (PSI) and Characteristic Stability Index (CSI) are monitored against pre-set supervisory thresholds.
+5. **Remediation Economics:** Three management policies are evaluated: **Strategy A** (Do Nothing), **Strategy B** (Reset Cut-off), and **Strategy C** (Rolling Rebuild).
+
+---
+
+# Stage 1: Data Ingestion & Pre-Origination Hygiene
+
+To prevent data leakage, we retain strictly pre-origination attributes known at application time. Post-origination servicing history and Lending Club's proprietary credit `grade` / `sub_grade` / `int_rate` are purged.
+
+```{r stage1_load}
+# Load cleaned dataset from cache or process raw file
+if (file.exists("data/df_cleaned.rds")) {
+  df <- readRDS("data/df_cleaned.rds")
+} else {
+  source("01_load_clean.R")
+}
+
+feat <- setdiff(names(df), c("bad", "issue_year"))
+
+cat(sprintf("Cleaned Dataset: %s observations across %d features.\n", 
+            format(nrow(df), big.mark = ","), length(feat)))
+
+# Check vintage distribution
+table(df$issue_year)
+```
+
+---
+
+# Stage 2: Exploratory Data Analysis & Seasoning Bias
+
+We inspect cohort volume, default prevalence, and applicant risk tiers.
+
+```{r stage2_eda}
+# Portfolio volume and bad rate by vintage
+vintage_tbl <- df %>%
+  group_by(issue_year) %>%
+  summarise(
+    loans = n(),
+    bads = sum(bad),
+    bad_rate = mean(bad),
+    mean_fico = mean(fico, na.rm = TRUE),
+    mean_dti = mean(dti, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+kable(vintage_tbl, digits = 4, caption = "Origination Cohort Overview (2012-2018)")
+```
+
+```{r plot_vintage, fig.cap="Realized Bad Rate by Origination Vintage with Seasoning Zone"}
+ggplot(vintage_tbl, aes(x = issue_year, y = bad_rate)) +
+  geom_line(color = "#1f77b4", linewidth = 1.2) +
+  geom_point(color = "#1f77b4", size = 3) +
+  annotate("rect", xmin = 2016.5, xmax = 2018.5, ymin = 0, ymax = Inf, alpha = 0.15, fill = "red") +
+  annotate("text", x = 2017.5, y = max(vintage_tbl$bad_rate) * 0.95,
+           label = "Right-Censoring Zone\n(Maturity Bias)", color = "darkred", size = 3.5, fontface = "italic") +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_x_continuous(breaks = min(vintage_tbl$issue_year):max(vintage_tbl$issue_year)) +
+  labs(title = "Realized Bad Rate by Origination Vintage", x = "Vintage Year", y = "Bad Rate") +
+  theme_minimal()
+```
+
+---
+
+# Stage 3: Scorecard Build on 2012–2014 Cohort
+
+We bin candidate features using tree-based Weight of Evidence (WOE), filter by Information Value ($IV \ge 0.02$), estimate a logistic regression, and scale log-odds into standard scorecard points ($600$ points at $1/19$ odds, $PDO = 50$).
+
+```{r stage3_scorecard}
+# Load or build scorecard
+if (file.exists("data/base_fit.rds")) {
+  base_fit <- readRDS("data/base_fit.rds")
+  cutoff   <- readRDS("data/cutoff.rds")
+} else {
+  source("03_build_scorecard.R")
+}
+
+summary(base_fit$model)
+
+# Model card
+model_card <- tibble(
+  Variable = names(base_fit$iv),
+  Information_Value = round(as.numeric(base_fit$iv), 4),
+  Strength = case_when(
+    Information_Value >= 0.30 ~ "Strong",
+    Information_Value >= 0.10 ~ "Medium",
+    TRUE ~ "Weak"
+  )
+) %>% arrange(desc(Information_Value))
+
+kable(model_card, caption = "Model Card: Selected Predictors & Information Value")
+```
+
+---
+
+# Stage 4: Longitudinal Fast-Forward Test (2015–2018)
+
+We score all subsequent cohorts with the frozen scorecard and track discrimination, calibration gap, and portfolio profit under stylized bank economics ($MARGIN = 10\%$, $LGD = 60\%$).
+
+```{r stage4_fastforward}
+if (file.exists("data/perf.rds")) {
+  perf <- readRDS("data/perf.rds")
+} else {
+  source("04_fast_forward_test.R")
+}
+
+kable(perf, digits = 4, caption = "Longitudinal Performance of Frozen Scorecard (2015-2018)")
+```
+
+```{r plot_gini_calib, fig.cap="Discrimination (Gini) and Calibration Gap Trends"}
+p_g <- ggplot(perf, aes(x = factor(issue_year), y = gini, group = 1)) +
+  geom_line(color = "#2b5c8f", linewidth = 1.3) +
+  geom_point(color = "#2b5c8f", size = 3) +
+  labs(title = "Scorecard Discrimination (Gini Index)", x = "Vintage Year", y = "Gini (2 x AUC - 1)") +
+  theme_minimal()
+
+p_c <- ggplot(perf, aes(x = factor(issue_year), y = calib_gap, fill = calib_gap > 0)) +
+  geom_col(width = 0.6) +
+  geom_hline(yintercept = c(-0.25, 0.25), linetype = "dotted", color = "red") +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_fill_manual(values = c("TRUE" = "#e6550d", "FALSE" = "#3182bd"), guide = "none") +
+  labs(title = "Model Calibration Gap", x = "Vintage Year", y = "Calibration Gap (%)") +
+  theme_minimal()
+
+gridExtra::grid.arrange(p_g, p_c, ncol = 2)
+```
+
+---
+
+# Stage 5: Early-Warning Surveillance (PSI & CSI)
+
+We evaluate score divergence via Population Stability Index (PSI) and input variable drift via Characteristic Stability Index (CSI).
+
+```{r stage5_surveillance}
+if (file.exists("data/alerts.rds")) {
+  alerts  <- readRDS("data/alerts.rds")
+  csi_tbl <- readRDS("data/csi_tbl.rds")
+} else {
+  source("05_early_warning_signals.R")
+}
+
+kable(alerts %>% select(issue_year, gini, gini_drop, calib_gap, psi, alert, decayed),
+      digits = 4, caption = "Surveillance Alert Log (PSI > 0.25 | |Calib Gap| > 0.25)")
+```
+
+```{r plot_csi, fig.cap="Characteristic Stability Index (CSI) Heatmap Across Model Features"}
+ggplot(csi_tbl, aes(x = factor(year), y = clean_var, fill = csi)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = sprintf("%.3f", csi)), size = 3.5, color = ifelse(csi_tbl$csi > 0.15, "white", "black")) +
+  scale_fill_gradient2(low = "#f7fbff", mid = "#fd8d3c", high = "#b30000", midpoint = 0.15) +
+  labs(title = "Predictor Covariate Drift (CSI)", x = "Vintage", y = "Predictor", fill = "CSI") +
+  theme_minimal()
+```
+
+---
+
+# Stage 6: Remediation Strategies & Decision Economics
+
+We benchmark three intervention strategies across test vintages 2016–2018:
+- **Strategy A (Do Nothing):** Retain frozen 2012–2014 scorecard and 2015 cut-off.
+- **Strategy B (Reset Cut-off):** Dynamically reset cut-off annually to maintain target 70% approval.
+- **Strategy C (Rebuild):** Retrain scorecard on trailing 3-year rolling window.
+
+```{r stage6_strategies}
+if (file.exists("data/strategies.rds")) {
+  strategies   <- readRDS("data/strategies.rds")
+  sens_results <- readRDS("data/sens_results.rds")
+} else {
+  source("06_remediation_strategies.R")
+}
+
+kable(strategies %>% select(issue_year, strategy, approval_rate, bad_rate_approved, gini, profit_per_applicant),
+      digits = 4, caption = "Remediation Policy Comparison (2016-2018)")
+```
+
+```{r plot_profit, fig.cap="Net Portfolio Profit per Applicant Across Remediation Policies"}
+ggplot(strategies, aes(x = factor(issue_year), y = profit_per_applicant, fill = strategy)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  scale_fill_manual(values = c("A: Do Nothing" = "#7f7f7f", "B: Reset Cut-off" = "#3182bd", "C: Rebuild" = "#2ca02c")) +
+  scale_y_continuous(labels = dollar_format()) +
+  labs(title = "Profit per Applicant by Policy Strategy", x = "Vintage Year", y = "Profit ($)") +
+  theme_minimal()
+```
+
+### Parameter Sensitivity Analysis
+
+```{r stage6_sensitivity}
+kable(sens_results %>% select(scenario, margin, lgd, strategy, avg_profit_per_app),
+      digits = 2, caption = "Economic Sensitivity Grid (Margin vs LGD)")
+```
+
+---
+
+# Governance & Conclusions
+
+1. **Discrimination vs Calibration:** Rank-ordering ($Gini$) demonstrates high structural resilience over 3–4 years, while calibration and score distributions experience significant macro and policy drift.
+2. **Optimal Remediation:** Strategy B (annual cut-off reset) delivers optimal operational return, restoring target origination volumes without the substantial governance overhead of model refitting.
+3. **Model Risk Policy:** Trigger full rebuilds only when both PSI and Gini decay exceed established limits ($\text{PSI} > 0.25$ and $\Delta Gini > 0.05$).
